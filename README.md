@@ -5,8 +5,8 @@ Mirror 仓库 [Gitee](https://gitee.com/daocloud/public-image-mirror)
 
 - 白名单 & 限流 的公开信息 [#2328](https://github.com/DaoCloud/public-image-mirror/issues/2328)
 - 如有疑问请咨询 [#4183](https://github.com/DaoCloud/public-image-mirror/issues/4183)
-- 建议将拉取任务放在闲时 凌晨(北京时间 01-07 点), 其他时间段非常拥挤
-- 建议使用明确版本号的 tag, 对于 latest 这种变更后响应旧数据, 并且后台重新同步
+- 建议将拉取任务放在闲时 凌晨(北京时间 01-07 点), 其他时间段非常拥挤, 高峰期工作日(北京时间 09-11, 14-17点)
+- 建议优先使用 `@sha256:` 指定镜像, 其次使用明确版本号的 tag, 最后才考虑 latest 这种可变 tag, 其变更后会响应旧数据, 并且后台重新同步
 - [本服务后端代码](https://github.com/OpenCIDN/ocimirror)
 - [同步队列](https://queue.m.daocloud.io/status/) 仅保留一小时的同步记录
 - [服务状态监控](https://status.daocloud.io/status/docker)
@@ -20,9 +20,9 @@ Mirror 仓库 [Gitee](https://gitee.com/daocloud/public-image-mirror)
 * 稳定可靠，更新实时。每天检查同步情况。
 * 此项目仅是源镜像仓库 (Registry) 的 Mirror
   * 所有 hash(sha256) 均和源保持一致 (懒加载机制)。
-  * 缓存的内容只保留 90 天, 过期后会需要重新同步。
+  * 缓存的内容只保留 30 天, 过期后会需要重新同步。
   * Manifest 内存缓存 1 小时, 所以 tag 被更新了 1 小时之后才会同步新的。
-  * Blob 内存缓存 1 分钟, 在期间如果 blob 到达 90 天期限被删除会报 404。
+  * Blob 内存缓存 1 分钟, 在期间如果 blob 到达 30 天期限被删除, 导致会报 404。
 
 ## 快速开始
 
@@ -49,22 +49,19 @@ m.daocloud.io/docker.io/library/busybox
 docker.m.daocloud.io/library/busybox
 ```
 
-## 无缓存
-
-在拉取的时候如果我们没有缓存, 将会在 [同步队列](https://queue.m.daocloud.io/status/) 添加同步缓存的任务.
-
 ## 支持前缀替换的 Registry (不推荐)
 
 推荐使用添加前缀的方式.
 
 前缀替换的 Registry 的规则, 这是人工配置的, 有需求提 Issue.
 
-除了这里每一个源站, 内容都是不同的, 不要把 docker.io 之外的站点配置给 registry-mirrors
+这里每一个源站内容都是不同的, 不要把 docker.io 之外的站点配置给 docker 的 registry-mirrors
 
 | 源站               | 替换为                | 备注                                           |
 | ------------------ | --------------------- | ---------------------------------------------- |
 | docker.elastic.co  | elastic.m.daocloud.io |                                                |
 | docker.io          | docker.m.daocloud.io  |                                                |
+| dhi.io             | dhi.m.daocloud.io     |                                                |
 | gcr.io             | gcr.m.daocloud.io     |                                                |
 | ghcr.io            | ghcr.m.daocloud.io    |                                                |
 | k8s.gcr.io         | k8s-gcr.m.daocloud.io | k8s.gcr.io 已被迁移到 registry.k8s.io          |
@@ -75,6 +72,11 @@ docker.m.daocloud.io/library/busybox
 | registry.ollama.ai | ollama.m.daocloud.io  | 实验内测中，[使用方法](#加速-ollama--deepseek) |
 
 ## 最佳实践
+
+### 部署内网缓存
+
+本地缓存部署用于在内网环境中加速镜像拉取，减少对外网的依赖。通过设置一个本地镜像仓库，您可以缓存常用的镜像。
+[请参考文档](https://github.com/DaoCloud/public-image-mirror/tree/main/docs/local-cache)
 
 ### 加速 Kubneretes
 
@@ -121,6 +123,46 @@ kubectl rollout status deployment/repimage -n kube-system
   ]
 }
 ```
+
+### 加速 Podman
+
+添加到 `/etc/containers/registries.conf` (rootless 模式也可以添加到 `~/.config/containers/registries.conf`)
+``` toml
+[[registry]]
+location = "docker.io"
+
+[[registry.mirror]]
+location = "docker.m.daocloud.io"
+```
+
+与 Docker 不同, Podman 还支持为 docker.io 之外的 registry 配置 mirror, 例如:
+``` toml
+[[registry]]
+location = "gcr.io"
+
+[[registry.mirror]]
+location = "gcr.m.daocloud.io"
+
+[[registry]]
+location = "ghcr.io"
+
+[[registry.mirror]]
+location = "ghcr.m.daocloud.io"
+
+[[registry]]
+location = "quay.io"
+
+[[registry.mirror]]
+location = "quay.m.daocloud.io"
+
+[[registry]]
+location = "registry.k8s.io"
+
+[[registry.mirror]]
+location = "k8s.m.daocloud.io"
+```
+
+* 参考 Podman 官方文档: [registries.conf](https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md)
 
 ### 加速 Ollama & DeepSeek
 
